@@ -3,7 +3,7 @@ WORKDIR /app
 COPY . .
 ARG GITHUB_SHA
 ARG VERSION
-RUN apk add --no-cache nodejs zstd && \
+RUN apk add --no-cache nodejs git zstd && \
     ARCH=$(uname -m) && \
     case "$ARCH" in \
         "x86_64") zstd -f /usr/bin/node -o assets/node_linux_amd64.zst ;; \
