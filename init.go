@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/beck-8/subs-check/app"
+	"github.com/beck-8/subs-check/utils"
 	"github.com/lmittmann/tint"
 	mihomoLog "github.com/metacubex/mihomo/log"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -38,6 +39,7 @@ func init() {
 		MaxBackups: 3,
 		MaxAge:     7,
 	}
+	utils.FileLogger = fileLogger
 
 	// 创建两个单独的handler
 	// 1. 终端输出 - 带颜色
