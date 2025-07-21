@@ -10,7 +10,10 @@ import (
 	"strings"
 
 	"github.com/beck-8/subs-check/config"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+var FileLogger *lumberjack.Logger
 
 // ExecuteCallback 执行回调脚本
 func ExecuteCallback(successCount int) {
@@ -82,6 +85,8 @@ func ExecuteCallback(successCount int) {
 
 	// 设置环境变量，传递成功节点数量
 	cmd.Env = append(os.Environ(), fmt.Sprintf("SUCCESS_COUNT=%d", successCount))
+
+	FileLogger.Close()
 
 	// 执行命令
 	output, err := cmd.CombinedOutput()
