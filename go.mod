@@ -2,6 +2,8 @@ module github.com/beck-8/subs-check
 
 go 1.24.3
 
+replace github.com/beck-8/subs-check => github.com/laojimigu/subs-check custom
+
 require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-gonic/gin v1.10.0
