@@ -4,6 +4,7 @@ print-progress: true
 # 并发线程数
 concurrent: 20
 # 检查间隔(分钟)
+# 必须大于0，小于等于0会设置间隔1分钟
 check-interval: 120
 # cron表达式，如果配置了此项，将忽略check-interval
 # 支持标准cron表达式，如：
@@ -203,10 +204,9 @@ sub-urls:
   - "https://raw.githubusercontent.com/chengaopan/AutoMergePublicNodes/master/list.yml"
   - "https://raw.githubusercontent.com/zhangkaiitugithub/passcro/main/speednodes.yaml"
   - "https://raw.githubusercontent.com/aiboboxx/v2rayfree/refs/heads/main/README.md"
-  - "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.meta.yml"
+  - "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/snippets/nodes.meta.yml"
   - "https://raw.githubusercontent.com/anaer/Sub/refs/heads/main/clash.yaml"
   - "https://raw.githubusercontent.com/free18/v2ray/refs/heads/main/c.yaml"
-  - "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.yml"
   - "https://raw.githubusercontent.com/Ruk1ng001/freeSub/main/clash.yaml"
   - "https://raw.githubusercontent.com/SoliSpirit/v2ray-configs/main/all_configs.txt"
   - "https://raw.githubusercontent.com/ripaojiedian/freenode/main/clash"
