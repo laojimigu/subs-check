@@ -35,7 +35,6 @@ download-timeout: 10
 # 单节点测速下载数据大小(MB)限制，0为不限
 download-mb: 20
 # 总下载速度速度限制(MB/s)，0为不限
-# 限制与实际情况可能会有一定误差
 total-speed-limit: 0
 
 # 监听端口，用于直接返回节点信息，方便订阅转换
@@ -167,6 +166,9 @@ s3-bucket-lookup: "auto"
 
 # 重试次数(获取订阅失败后重试次数)
 sub-urls-retry: 3
+# 获取订阅时使用的UA；如果设置random将会使用随机UA获取订阅
+# sub-urls-get-ua: "random"
+sub-urls-get-ua: "clash.meta (https://github.com/beck-8/subs-check)"
 # Github Proxy，获取订阅使用，结尾要带的 /
 # github-proxy: "https://ghfast.top/"
 github-proxy: ""
@@ -199,6 +201,8 @@ sub-urls:
   # - https://raw.githubusercontent.com/example/repo/main/config/{Ymd}.yaml
   # - https://raw.githubusercontent.com/example/repo/main/daily/daily-{Y}-{m}-{d}.yaml
   # - https://example.com/sub.txt#我是备注我是备注
+  # 打开这个就可以把上次可用的节点再次测一次
+  # - "http://127.0.0.1:8199/sub/all.yaml"
   - "https://raw.githubusercontent.com/firefoxmmx2/v2rayshare_subcription/main/subscription/clash_sub.yaml"
   - "https://raw.githubusercontent.com/Q3dlaXpoaQ/V2rayN_Clash_Node_Getter/refs/heads/main/APIs/sc0.yaml"
   - "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml"
