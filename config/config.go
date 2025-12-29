@@ -7,12 +7,14 @@ type Config struct {
 	Concurrent           int      `yaml:"concurrent"`
 	CheckInterval        int      `yaml:"check-interval"`
 	CronExpression       string   `yaml:"cron-expression"`
+	AliveTestUrl         string   `yaml:"alive-test-url"`
 	SpeedTestUrl         string   `yaml:"speed-test-url"`
 	DownloadTimeout      int      `yaml:"download-timeout"`
 	DownloadMB           int      `yaml:"download-mb"`
 	TotalSpeedLimit      int      `yaml:"total-speed-limit"`
 	MinSpeed             int      `yaml:"min-speed"`
 	Timeout              int      `yaml:"timeout"`
+	MediaCheckTimeout    int      `yaml:"media-check-timeout"`
 	FilterRegex          string   `yaml:"filter-regex"`
 	SaveMethod           string   `yaml:"save-method"`
 	WebDAVURL            string   `yaml:"webdav-url"`
@@ -32,6 +34,7 @@ type Config struct {
 	SubUrlsReTry         int      `yaml:"sub-urls-retry"`
 	SubUrlsRetryInterval int      `yaml:"sub-urls-retry-interval"`
 	SubUrlsTimeout       int      `yaml:"sub-urls-timeout"`
+	SubUrlsGetUA         string   `yaml:"sub-urls-get-ua"`
 	SubUrlsRemote        []string `yaml:"sub-urls-remote"`
 	SubUrls              []string `yaml:"sub-urls"`
 	SuccessRate          float32  `yaml:"success-rate"`
@@ -67,8 +70,11 @@ var GlobalConfig = &Config{
 	ListenPort:         ":8199",
 	NotifyTitle:        "🔔 节点状态更新",
 	MihomoOverwriteUrl: "http://127.0.0.1:8199/sub/ACL4SSR_Online_Full.yaml",
+	MediaCheckTimeout:  10,
 	Platforms:          []string{"openai", "youtube", "netflix", "disney", "gemini", "iprisk"},
 	DownloadMB:         20,
+	AliveTestUrl:       "http://gstatic.com/generate_204",
+	SubUrlsGetUA:       "clash.meta (https://github.com/beck-8/subs-check)",
 }
 
 //go:embed config.example.yaml

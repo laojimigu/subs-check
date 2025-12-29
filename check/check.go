@@ -3,7 +3,6 @@ package check
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"net"
@@ -199,59 +198,64 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 	}
 	defer httpClient.Close()
 
-	cloudflare, err := platform.CheckCloudflare(httpClient.Client)
-	if err != nil || !cloudflare {
-		return nil
-	}
-
-	google, err := platform.CheckGoogle(httpClient.Client)
+	google, err := platform.CheckAlive(httpClient.Client)
 	if err != nil || !google {
 		return nil
 	}
 
 	var speed int
 	if config.GlobalConfig.SpeedTestUrl != "" {
-		speed, _, err = platform.CheckSpeed(httpClient.Client, Bucket)
+		speed, _, err = platform.CheckSpeed(httpClient.Client, Bucket, httpClient.BytesRead)
 		if err != nil || speed < config.GlobalConfig.MinSpeed {
 			return nil
 		}
 	}
 
+	var mediaClient *http.Client
 	if config.GlobalConfig.MediaCheck {
+		mediaTimeout := config.GlobalConfig.MediaCheckTimeout
+		if mediaTimeout <= 0 {
+			mediaTimeout = 10
+		}
+		mediaClient = &http.Client{
+			Transport: httpClient.Client.Transport,
+			Timeout:   time.Duration(mediaTimeout) * time.Second,
+		}
+
 		// 遍历需要检测的平台
 		for _, plat := range config.GlobalConfig.Platforms {
 			switch plat {
 			case "openai":
-				cookiesOK, clientOK := platform.CheckOpenAI(httpClient.Client)
+				cookiesOK, clientOK := platform.CheckOpenAI(mediaClient)
 				if clientOK && cookiesOK {
 					res.Openai = true
 				} else if cookiesOK || clientOK {
 					res.OpenaiWeb = true
 				}
 			case "youtube":
-				if region, _ := platform.CheckYoutube(httpClient.Client); region != "" {
+				if region, _ := platform.CheckYoutube(mediaClient); region != "" {
 					res.Youtube = region
 				}
 			case "netflix":
-				if ok, _ := platform.CheckNetflix(httpClient.Client); ok {
+				if ok, _ := platform.CheckNetflix(mediaClient); ok {
 					res.Netflix = true
 				}
 			case "disney":
-				if ok, _ := platform.CheckDisney(httpClient.Client); ok {
+				if ok, _ := platform.CheckDisney(mediaClient); ok {
 					res.Disney = true
 				}
 			case "gemini":
-				if ok, _ := platform.CheckGemini(httpClient.Client); ok {
+				if ok, _ := platform.CheckGemini(mediaClient); ok {
 					res.Gemini = true
 				}
 			case "iprisk":
-				country, ip := proxyutils.GetProxyCountry(httpClient.Client)
+				country, ip := proxyutils.GetProxyCountry(mediaClient)
 				if ip == "" {
 					break
 				}
 				res.IP = ip
 				res.Country = country
-				risk, err := platform.CheckIPRisk(httpClient.Client, ip)
+				risk, err := platform.CheckIPRisk(mediaClient, ip)
 				if err == nil {
 					res.IPRisk = risk
 				} else {
@@ -259,7 +263,7 @@ func (pc *ProxyChecker) checkProxy(proxy map[string]any) *Result {
 					slog.Debug(fmt.Sprintf("查询IP风险失败: %v", err))
 				}
 			case "tiktok":
-				if region, _ := platform.CheckTikTok(httpClient.Client); region != "" {
+				if region, _ := platform.CheckTikTok(mediaClient); region != "" {
 					res.TikTok = region
 				}
 			}
@@ -405,6 +409,11 @@ func (pc *ProxyChecker) distributeProxies(proxies []map[string]any) {
 		}
 		pc.tasks <- proxy
 	}
+	// // 发送任务结束，进行一次内存回收
+	// for i := range proxies {
+	// 	proxies[i] = nil // 移除 map 引用
+	// }
+	// proxies = nil // 移除切片引用
 	close(pc.tasks)
 }
 
@@ -441,7 +450,12 @@ func (pc *ProxyChecker) checkSubscriptionSuccessRate(allProxies []map[string]any
 				subStats[subUrl] = stats
 			}
 			delete(result.Proxy, "sub_url")
-			delete(result.Proxy, "sub_tag")
+			// 可以保持127.0.0.1:8199/sub/all.yaml中的节点tag
+			if subTag, ok := result.Proxy["sub_tag"].(string); ok {
+				if subTag == "" {
+					delete(result.Proxy, "sub_tag")
+				}
+			}
 		}
 	}
 
@@ -466,11 +480,30 @@ func (pc *ProxyChecker) checkSubscriptionSuccessRate(allProxies []map[string]any
 	}
 }
 
+// statsConn wraps net.Conn to count bytes read and apply rate limiting
+type statsConn struct {
+	net.Conn
+	bytesRead *uint64
+	bucket    *ratelimit.Bucket
+}
+
+func (c *statsConn) Read(b []byte) (n int, err error) {
+	// 速度限制（全局）
+	if c.bucket != nil {
+		c.bucket.Wait(int64(len(b)))
+	}
+
+	n, err = c.Conn.Read(b)
+	atomic.AddUint64(c.bytesRead, uint64(n))
+
+	return n, err
+}
+
 // CreateClient creates and returns an http.Client with a Close function
 type ProxyClient struct {
 	*http.Client
 	proxy     constant.Proxy
-	Transport *StatsTransport
+	BytesRead *uint64
 }
 
 func CreateClient(mapping map[string]any) *ProxyClient {
@@ -480,6 +513,7 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 		return nil
 	}
 
+	var bytesRead uint64
 	baseTransport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(addr)
@@ -490,24 +524,29 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 			if port, err := strconv.ParseUint(port, 10, 16); err == nil {
 				u16Port = uint16(port)
 			}
-			return proxy.DialContext(ctx, &constant.Metadata{
+			conn, err := proxy.DialContext(ctx, &constant.Metadata{
 				Host:    host,
 				DstPort: u16Port,
 			})
+			if err != nil {
+				return nil, err
+			}
+			return &statsConn{
+				Conn:      conn,
+				bytesRead: &bytesRead,
+				bucket:    Bucket,
+			}, nil
 		},
 		DisableKeepAlives: true,
 	}
 
-	statsTransport := &StatsTransport{
-		Base: baseTransport,
-	}
 	return &ProxyClient{
 		Client: &http.Client{
 			Timeout:   time.Duration(config.GlobalConfig.Timeout) * time.Millisecond,
-			Transport: statsTransport,
+			Transport: baseTransport,
 		},
 		proxy:     proxy,
-		Transport: statsTransport,
+		BytesRead: &bytesRead,
 	}
 }
 
@@ -519,42 +558,13 @@ func (pc *ProxyClient) Close() {
 	}
 
 	// 即使这里不关闭，底层GC的时候也会自动关闭
+	// 这里及时的关闭，方便内存回收
 	if pc.proxy != nil {
 		pc.proxy.Close()
 	}
 	pc.Client = nil
 
-	if pc.Transport != nil {
-		TotalBytes.Add(atomic.LoadUint64(&pc.Transport.BytesRead))
+	if pc.BytesRead != nil {
+		TotalBytes.Add(atomic.LoadUint64(pc.BytesRead))
 	}
-	pc.Transport = nil
-}
-
-type countingReadCloser struct {
-	io.ReadCloser
-	counter *uint64
-}
-
-func (c *countingReadCloser) Read(p []byte) (int, error) {
-	n, err := c.ReadCloser.Read(p)
-	atomic.AddUint64(c.counter, uint64(n))
-	return n, err
-}
-
-type StatsTransport struct {
-	Base      http.RoundTripper
-	BytesRead uint64
-}
-
-func (s *StatsTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	resp, err := s.Base.RoundTrip(req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp.Body = &countingReadCloser{
-		ReadCloser: resp.Body,
-		counter:    &s.BytesRead,
-	}
-	return resp, nil
 }
