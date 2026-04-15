@@ -1,11 +1,12 @@
 package platform
 
 import (
-	"io"
+	"bytes"
 	"net/http"
 	"regexp"
-	"strings"
 )
+
+var openaiRe = regexp.MustCompile(`loc=([A-Z]{2})`)
 
 // OpenAIResult 表示 OpenAI 检测结果
 type OpenAIResult struct {
@@ -50,13 +51,14 @@ func getOpenAIRegion(httpClient *http.Client) string {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	buf := getPooledBuf()
+	defer putPooledBuf(buf)
+	if _, err := buf.ReadFrom(resp.Body); err != nil {
 		return ""
 	}
+	body := buf.Bytes()
 
-	re := regexp.MustCompile(`loc=([A-Z]{2})`)
-	matches := re.FindSubmatch(body)
+	matches := openaiRe.FindSubmatch(body)
 	if len(matches) > 1 {
 		return string(matches[1])
 	}
@@ -76,12 +78,14 @@ func checkCookies(httpClient *http.Client) bool {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	buf := getPooledBuf()
+	defer putPooledBuf(buf)
+	if _, err := buf.ReadFrom(resp.Body); err != nil {
 		return false
 	}
+	body := buf.Bytes()
 
-	return !strings.Contains(strings.ToLower(string(body)), "unsupported_country")
+	return !bytes.Contains(bytes.ToLower(body), []byte("unsupported_country"))
 }
 
 // checkClient 通过模拟客户端访问检查app可用性
@@ -107,11 +111,13 @@ func checkClient(httpClient *http.Client) bool {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	buf := getPooledBuf()
+	defer putPooledBuf(buf)
+	if _, err := buf.ReadFrom(resp.Body); err != nil {
 		return false
 	}
+	body := buf.Bytes()
 
-	bodyLower := strings.ToLower(string(body))
-	return !strings.Contains(bodyLower, "unsupported_country") && !strings.Contains(bodyLower, "vpn")
+	bodyLower := bytes.ToLower(body)
+	return !bytes.Contains(bodyLower, []byte("unsupported_country")) && !bytes.Contains(bodyLower, []byte("vpn"))
 }

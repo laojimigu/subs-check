@@ -1,13 +1,14 @@
 package platform
 
 import (
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/biter777/countries"
 )
+
+var geminiRe = regexp.MustCompile(`,2,1,200,"([A-Z]{3})"`)
 
 // Gemini 封禁地区列表（三字码）
 var geminiBlockedCodes = map[string]bool{
@@ -39,21 +40,20 @@ func CheckGemini(httpClient *http.Client) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	buf := getPooledBuf()
+	defer putPooledBuf(buf)
+	if _, err := buf.ReadFrom(resp.Body); err != nil {
 		return "", err
 	}
-
-	bodyStr := string(body)
+	body := buf.Bytes()
 
 	// 提取三字母国家码
-	re := regexp.MustCompile(`,2,1,200,"([A-Z]{3})"`)
-	matches := re.FindStringSubmatch(bodyStr)
+	matches := geminiRe.FindSubmatch(body)
 	if len(matches) <= 1 {
 		return "", nil
 	}
 
-	alpha3Code := matches[1]
+	alpha3Code := string(matches[1])
 
 	// 检查是否在封禁列表中
 	if geminiBlockedCodes[alpha3Code] {
