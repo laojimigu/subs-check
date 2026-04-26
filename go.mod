@@ -1,6 +1,7 @@
 module github.com/beck-8/subs-check
 
 go 1.25.0
+replace github.com/beck-8/subs-check => github.com/laojimigu/subs-check custom
 
 require (
 	github.com/beck-8/2clash v0.0.0-20260420045119-42270efca3e0
